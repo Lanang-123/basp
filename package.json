@@ -2,19 +2,42 @@
   "name": "frontend-bsp",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed": "node ./config/loadDB.js"
   },
   "dependencies": {
+    "@astrajs/collections": "^0.3.4",
+    "@datastax/astra-db-ts": "^1.5.0",
+    "@google/generative-ai": "^0.21.0",
+    "@langchain/community": "^0.3.34",
+    "@langchain/core": "^0.3.42",
+    "@langchain/google-genai": "^0.1.10",
+    "@lottiefiles/dotlottie-react": "^0.13.0",
+    "@tailwindcss/line-clamp": "^0.4.0",
+    "ai": "^4.1.54",
+    "alpinejs": "^3.10.2",
+    "axios": "^0.27.2",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "framer-motion": "^12.5.0",
+    "langchain": "^0.3.19",
+    "next": "15.2.2",
+    "pdf-parse": "^1.1.1",
+    "postcss": "^8.5.3",
+    "puppeteer": "^24.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.2.2"
+    "react-icons": "^4.12.0",
+    "sparkpost": "^2.1.4",
+    "tailwind-capitalize-first-letter": "^1.0.4"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4"
+    "@tailwindcss/postcss": "^4.0.13",
+    "tailwindcss": "^4.0.13"
   }
 }
