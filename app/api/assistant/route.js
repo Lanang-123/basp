@@ -23,16 +23,15 @@ const generateEmbeddings = async (text) => {
 };
 
 export async function POST(request) {
-  try {
-    // Set CORS headers
-    const headers = new Headers();
-    headers.set("Access-Control-Allow-Origin", "*");
-    headers.set("Access-Control-Allow-Methods", "POST");
-    headers.set("Access-Control-Allow-Headers", "Content-Type");
+  const headers = new Headers();
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "POST");
+  headers.set("Access-Control-Allow-Headers", "Content-Type");
 
+  try {
     const body = await request.json();
-    const { message, mode } = body;
-    
+    const { message, mode, language = "id" } = body; // Default ke Bahasa Indonesia
+
     if (!message) {
       return new NextResponse(
         JSON.stringify({ message: "Message is required" }),
@@ -40,77 +39,57 @@ export async function POST(request) {
       );
     }
 
-    // Hanya untuk mode Q&A (default); jika bukan ringkasan
-    // Di dalam fungsi POST, ubah bagian greeting check menjadi:
+    // Handle Greeting Response
     if (!mode || mode !== "summary") {
-      const greetingKeywords = ["halo", "hai", "hey", "selamat pagi", "selamat siang", "selamat malam"];
-      if (greetingKeywords.some(keyword => message.toLowerCase().trim().startsWith(keyword))) {
-        // Prompt khusus untuk perkenalan diri
-        const introPrompt = `
-          Anda adalah Bli Surya, Assistant virtual dari PT. Bali Surya Pratama 
-          yang berbasis AI. Perkenalkan diri Anda dengan ramah dan profesional 
-          dalam 1-2 kalimat. Jelaskan bahwa Anda siap membantu terkait 
-          informasi pengelolaan limbah perusahaan.
-          
-          Contoh respons yang diharapkan:
-          "Halo, saya Bli Surya. Asisten virtual AI PT. Bali Surya Pratama 
-          yang siap membantu Anda mendapatkan informasi terkait pengelolaan 
-          limbah dan layanan perusahaan kami."
-        `;
+      const greetingKeywords = language === "id"
+        ? ["halo", "hai", "hey", "selamat pagi", "selamat siang", "selamat malam"]
+        : ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"];
+
+      const normalizedMessage = message.toLowerCase().trim();
+      if (greetingKeywords.some((keyword) => normalizedMessage.startsWith(keyword))) {
+        const introPrompt = language === "id"
+          ? `Anda adalah Bli Surya, Asisten Virtual PT. Bali Surya Pratama. Perkenalkan diri secara profesional dalam 2 kalimat. Jelaskan kemampuan Anda dalam membantu pengelolaan limbah dan layanan perusahaan kami. Gunakan bahasa Indonesia yang santun.`
+          : `You are Bli Surya, Virtual Assistant of PT. Bali Surya Pratama. Introduce yourself professionally in 2 sentences. Explain your capabilities in waste management and our company services. Use polite English.`;
 
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const response = await model.generateContent(introPrompt);
-        
-        // Parsing respons
-        let fullOutput = "";
-        const candidate = response.response.candidates[0];
-        if (typeof candidate.content === "string") {
-          fullOutput = candidate.content;
-        } else if (candidate.content?.parts?.length) {
-          fullOutput = candidate.content.parts.map(part => part.text).join(" ");
-        } else if (candidate.content?.text) {
-          fullOutput = candidate.content.text;
-        }
+        const text = response.response.text();
 
-        console.log("Deteksi sapaan, mengembalikan respons AI:", fullOutput);
-        return new NextResponse(JSON.stringify({ response: fullOutput }), { 
-          status: 200, 
-          headers 
+        return new NextResponse(JSON.stringify({ response: text }), {
+          status: 200,
+          headers,
         });
       }
     }
 
-    // Mode "summary" untuk merangkum percakapan
+    // Handle Summary Mode
     if (mode === "summary") {
-      const promptTemplate = `
-        Anda adalah asisten AI yang ahli dalam merangkum percakapan tentang pengelolaan limbah.
-        Buatlah ringkasan yang jelas, komprehensif, dan terstruktur dari percakapan berikut:
-        
-        ${message}
-        
-        Ringkasan:
-      `;
+      const promptTemplate = language === "id"
+        ? `Buat ringkasan percakapan tentang pengelolaan limbah dan layanan perusahaan dengan struktur:
+1. Poin-poin penting
+2. Rekomendasi
+3. Langkah tindak lanjut
+Sajikan ringkasan tersebut dalam format daftar bernomor (misalnya: 1., 2., 3., dst) dan hindari penggunaan simbol bintang.
+Konten: ${message}`
+        : `Create a conversation summary about waste management and company services with the following structure:
+1. Key points
+2. Recommendations
+3. Next steps
+Please provide the summary in a numerical list format (e.g., 1., 2., 3., etc.) and avoid using bullet symbols.
+Content: ${message}`;
+
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const response = await model.generateContent(promptTemplate);
+      const text = response.response.text();
 
-      // Parsing respons
-      let fullOutput = "";
-      const candidate = response.response.candidates[0];
-      if (typeof candidate.content === "string") {
-        fullOutput = candidate.content;
-      } else if (candidate.content?.parts?.length) {
-        fullOutput = candidate.content.parts.map(part => part.text).join(" ");
-      } else if (candidate.content?.text) {
-        fullOutput = candidate.content.text;
-      }
-
-      return new NextResponse(
-        JSON.stringify({ response: fullOutput }),
-        { status: 200, headers }
-      );
+      return new NextResponse(JSON.stringify({ response: text }), {
+        status: 200,
+        headers,
+      });
     }
 
-    // Mode Q&A (default)
+    // Handle Q&A Mode
+    // Dapatkan embedding pertanyaan untuk mencari konteks terkait dari database
     const queryEmbedding = await generateEmbeddings(message);
     const collection = await db.collection(ASTRA_DB_COLLECTION);
     const searchResultsCursor = await collection.find(null, {
@@ -118,49 +97,45 @@ export async function POST(request) {
       limit: 5,
     });
     const searchResults = await searchResultsCursor.toArray();
-    const docContext = searchResults.map(doc => doc.text).join("\n---\n");
+    const docContext = searchResults.map((doc) => doc.text).join("\n---\n");
 
-    // Prompt Q&A
-    const promptTemplate = `
-      Nama anda adalah Bli Surya. Anda adalah Assistant virtual PT. Bali Surya Pratama.
-      Jawablah pertanyaan dengan jawaban yang mendetail, terstruktur, dan berdasarkan konteks berikut.
-      Jika pertanyaan yang diajukan tidak berkaitan dengan limbah atau tidak terdapat informasi relevan,
-      maka jawab dengan "Mohon maaf, pertanyaan tersebut di luar pemahamana."
-
-      KONTEKS:
-      ${docContext}
-
-      PERTANYAAN:
-      ${message}
-
-      JAWABAN:
-    `;
+    // Prompt untuk Q&A Mode dengan instruksi untuk menjawab dengan daftar bernomor
+    const promptTemplate = language === "id"
+      ? `Anda adalah Bli Surya, Asisten Virtual PT. Bali Surya Pratama dengan pengetahuan seputar layanan perusahaan dan pengelolaan limbah.
+Context: ${docContext}
+Pertanyaan: ${message}
+Aturan:
+1. Jawab dengan kalimat yang jelas dan terstruktur.
+2. Jika tidak mengetahui jawaban, katakan "Maaf saya belum bisa membantu pertanyaan itu".
+3. Fokus pada solusi pengelolaan limbah serta informasi layanan perusahaan kami.
+4. Sajikan jawaban dalam format daftar bernomor (misalnya: 1., 2., 3., dst) dan hindari penggunaan simbol bintang.`
+      : `You are Bli Surya, Virtual Assistant of PT. Bali Surya Pratama with knowledge about our company services and general waste management.
+Context: ${docContext}
+Question: ${message}
+Rules:
+1. Answer using clear and structured sentences.
+2. If unsure, say "Sorry I can't answer that yet".
+3. Focus on waste management solutions as well as information about our company services.
+4. Provide the answer in a numerical list format (e.g., 1., 2., 3., etc.) and avoid using bullet symbols.`;
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const response = await model.generateContent(promptTemplate);
+    const text = response.response.text();
 
-    let fullOutput = "";
-    const candidate = response.response.candidates[0];
-    if (typeof candidate.content === "string") {
-      fullOutput = candidate.content;
-    } else if (candidate.content?.parts?.length) {
-      fullOutput = candidate.content.parts.map(part => part.text).join(" ");
-    } else if (candidate.content?.text) {
-      fullOutput = candidate.content.text;
-    }
+    return new NextResponse(JSON.stringify({ response: text }), {
+      status: 200,
+      headers,
+    });
 
-    return new NextResponse(
-      JSON.stringify({ response: fullOutput }),
-      { status: 200, headers }
-    );
   } catch (error) {
     console.error("Error:", error);
+    const errorMessage = language === "id"
+      ? "Maaf, terjadi kesalahan. Silakan coba lagi."
+      : "Sorry, an error occurred. Please try again.";
+
     return new NextResponse(
-      JSON.stringify({
-        message: "Internal server error",
-        error: error instanceof Error ? error.message : error,
-      }),
-      { status: 500, headers: new Headers({ "Access-Control-Allow-Origin": "*" }) }
+      JSON.stringify({ message: errorMessage }),
+      { status: 500, headers }
     );
   }
 }
