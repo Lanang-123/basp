@@ -33,7 +33,7 @@ const Galery = () => {
         <h1 className="text-gray-800 md:text-5xl text-3xl font-bold mb-6">
           Gallery Bali Surya Pratama
         </h1>
-        <p className="text-gray-600 text-lg">Kenangan terbaik dalam satu frame</p>
+        <p className="text-gray-600 text-lg">Portofolio produk kami dalam 1 frame.</p>
       </div>
 
       {/* Gallery Grid */}
